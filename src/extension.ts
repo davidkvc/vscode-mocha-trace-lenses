@@ -47,25 +47,12 @@ class TraceCodeLensProvider implements vscode.CodeLensProvider {
 		if(document.fileName.endsWith('.ts')) {
 			try {
 				const parsedFile = ts.createSourceFile('x.ts', document.getText(), ts.ScriptTarget.Latest);
-				const testNodes = this.traverse(parsedFile);
+				const testNodes = this.traverse(parsedFile, parsedFile);
 
 				testNodes.forEach(createLenses);
 				function createLenses(testNode: testNode) {
-					//can't use this because it counts newline characters :/
-					//const startPos = document.positionAt(testNode.pos);
-					const lines = document.getText().split(document.eol === vscode.EndOfLine.CRLF
-						? '\r\n' : '\n');
-					let line = 0;
-					let count = 0;
-					for (let idx = 0; idx < lines.length; idx++) {
-						count += lines[idx].length;
-						
-						if (count > testNode.pos) {
-							break;
-						}
-
-						line++;
-					}
+					const { line } = parsedFile.getLineAndCharacterOfPosition(testNode.pos);
+					console.log('converted node pos', testNode.pos, 'to line', line);
 					const lens = new vscode.CodeLens(
 						new vscode.Range(line, 0, line, 0),
 						{
@@ -86,43 +73,65 @@ class TraceCodeLensProvider implements vscode.CodeLensProvider {
 		return result;
 	}
 
-	traverse(node: ts.Node): testNode[] {
+	traverse(node: ts.Node, sourceFile: ts.SourceFile): testNode[] {
 		const rootTests: testNode[] = [];
-		traverseInternal(node);
+		traverseInternal(node, sourceFile);
 
 		return rootTests;
 
-		function traverseInternal(node: ts.Node, parentTest?: testNode) {
+		function traverseInternal(node: ts.Node, sourceFile: ts.SourceFile, parentTest?: testNode) {
 			switch (node.kind) {
 				case ts.SyntaxKind.CallExpression:
 					const call = node as ts.CallExpression;
 					if (isTestFunctionCall(call)) {
 						const test = {
 							title: (call.arguments[0] as any).text,
-							pos: node.pos,
+							pos: node.getStart(sourceFile),
 							parent: parentTest,
 							children: []
 						}
+
+						console.log('Found test', test.title, 'at', node.pos);
 
 						if (parentTest)
 							parentTest.children.push(test);
 						else {
 							rootTests.push(test);
 						}
-						ts.forEachChild(node, n => traverseInternal(n, test));
+						ts.forEachChild(node, n => traverseInternal(n, sourceFile, test));
 					} else {
-						ts.forEachChild(node, n => traverseInternal(n, parentTest));
+						ts.forEachChild(node, n => traverseInternal(n, sourceFile, parentTest));
 					}
 					break;
 				default:
-					ts.forEachChild(node, n => traverseInternal(n, parentTest));
+					ts.forEachChild(node, n => traverseInternal(n, sourceFile, parentTest));
 					break;
 			}
 		}
 
 		function isTestFunctionCall(node: ts.CallExpression): boolean {
-			const functionName = (node.expression as any).text;
+			const functionName = getFunctionName(node.expression);
 			return (functionName == 'describe' || functionName == 'it') && node.arguments.length == 2;
+		}
+
+		function getFunctionName(node: ts.Node) {
+			switch (node.kind) {
+				case ts.SyntaxKind.Identifier:
+					const ident = node as ts.Identifier;
+					return ident.text;
+				case ts.SyntaxKind.PropertyAccessExpression:
+					const propertyAccess = node as ts.PropertyAccessExpression;
+					const name = propertyAccess.name.text;
+					if (propertyAccess.expression.kind === ts.SyntaxKind.CallExpression) {
+						const call = propertyAccess.expression as ts.CallExpression;
+						if (call.expression.kind == ts.SyntaxKind.Identifier) {
+							const callIden = call.expression as ts.Identifier;
+							if (callIden.text === 'tags') {
+								return name;
+							}
+						}
+					}
+			}
 		}
 	}
 }
