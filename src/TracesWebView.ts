@@ -187,7 +187,7 @@ export class TracesWebView {
             }
         }
 
-        let lines = `${escape(trace.request.method)} ${escape(trace.request.url)}\n`;
+        let lines = `${escape(trace.request.method)} ${escape(trace.request.url)} (${trace.request.elapsed}ms)\n`;
 
         if (trace.request.headers) {
             for (const key in trace.request.headers) {
