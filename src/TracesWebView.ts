@@ -162,6 +162,8 @@ export class TracesWebView {
         switch (trace.type) {
             case 'request':
                 return this.renderRequestTrace(trace);
+            case 'sql':
+                return this.renderSqlTrace(trace);
             default:
                 return `<p>Can not render trace of type '${escape(trace.type)}'</p>`;
         }
@@ -187,7 +189,7 @@ export class TracesWebView {
             }
         }
 
-        let lines = `${escape(trace.request.method)} ${escape(trace.request.url)} (${trace.request.elapsed}ms)\n`;
+        let lines = `${escape(trace.request.method)} ${escape(trace.request.url)} (${trace.elapsed}ms)\n`;
 
         if (trace.request.headers) {
             for (const key in trace.request.headers) {
@@ -212,6 +214,16 @@ export class TracesWebView {
             if (trace.response.body) {
                 lines += renderBody(trace.response.body, trace.response.headers);
             }
+        }
+
+        return `<div><pre><code>${lines}</code></pre></div>`;
+    }
+
+    renderSqlTrace(trace: any): string {
+        let lines = `Executed SQL in ${trace.elapsed}ms\n\n${Prism.highlight(trace.sql, Prism.languages.sql, 'sql')}`;
+
+        if (trace.result === 'error') {
+            lines += `<<< error\n${trace.error.str}`;
         }
 
         return `<div><pre><code>${lines}</code></pre></div>`;
