@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
+import 'prismjs/components/prism-sql';
 import { Disposable, ExtensionContext, Uri, ViewColumn, WebviewPanel, window, workspace } from "vscode";
 var escape = require('escape-html');
 
@@ -11,6 +12,38 @@ type testNode = {
 	parent?: testNode,
 	children: testNode[]
 };
+
+type TraceCommon = {
+    file: string;
+    testTitlePath: string;
+    result: 'success' | 'error';
+    elapsed: number;
+
+};
+type RequestTrace = TraceCommon & {
+    type: 'request',
+    request: any;
+    response: any;
+    error?: {
+        str: string;
+        data: any;
+    }
+};
+type SqlTrace = TraceCommon & {
+    type: 'sql',
+    sql: string;
+    sqlParams: any;
+    data: any;
+    error?: {
+        str: string;
+        data: any;
+    }
+};
+type Trace = RequestTrace
+    | SqlTrace
+    | {
+        type: string;
+    };
 
 export class TracesWebView {
     private _showResponseInDifferentTab: boolean = false;
@@ -63,7 +96,7 @@ export class TracesWebView {
         this.activePanel = panel;
     }
 
-    loadTraces(documentUri: Uri, testNode: testNode): any[] {
+    loadTraces(documentUri: Uri, testNode: testNode): Trace[] {
         const ws = workspace.getWorkspaceFolder(documentUri);
         if (!ws) {
             return [];
@@ -109,12 +142,12 @@ export class TracesWebView {
                 }
 
                 return true;
-            })
+            });
 
         return testTraces;
     }
 
-    getHtml(testNode: testNode, traces: any[]): string {
+    getHtml(testNode: testNode, traces: Trace[]): string {
         function getTestPath(testNode: testNode): string {
             if (testNode.parent) {
                 return getTestPath(testNode.parent) + ' > ' + testNode.title;
@@ -158,18 +191,18 @@ export class TracesWebView {
 </html>`;
     }
 
-    renderTrace(trace: any): string {
+    renderTrace(trace: Trace): string {
         switch (trace.type) {
             case 'request':
-                return this.renderRequestTrace(trace);
+                return this.renderRequestTrace(trace as RequestTrace);
             case 'sql':
-                return this.renderSqlTrace(trace);
+                return this.renderSqlTrace(trace as SqlTrace);
             default:
                 return `<p>Can not render trace of type '${escape(trace.type)}'</p>`;
         }
     }
 
-    renderRequestTrace(trace: any): string {
+    renderRequestTrace(trace: RequestTrace): string {
 
         function isJson(contentType: string): boolean {
             return contentType.split(';')
@@ -219,11 +252,11 @@ export class TracesWebView {
         return `<div><pre><code>${lines}</code></pre></div>`;
     }
 
-    renderSqlTrace(trace: any): string {
+    renderSqlTrace(trace: SqlTrace): string {
         let lines = `Executed SQL in ${trace.elapsed}ms\n\n${Prism.highlight(trace.sql, Prism.languages.sql, 'sql')}`;
 
         if (trace.result === 'error') {
-            lines += `<<< error\n${trace.error.str}`;
+            lines += `<<< error\n${trace.error!.str}`;
         }
 
         return `<div><pre><code>${lines}</code></pre></div>`;
