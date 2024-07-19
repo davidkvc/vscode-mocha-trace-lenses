@@ -111,7 +111,7 @@ class TraceCodeLensProvider implements vscode.CodeLensProvider {
 
 		function isTestFunctionCall(node: ts.CallExpression): boolean {
 			const functionName = getFunctionName(node.expression);
-			return (functionName == 'describe' || functionName == 'it') && node.arguments.length == 2;
+			return (functionName === 'describe' || functionName === 'it') && node.arguments.length === 2;
 		}
 
 		function getFunctionName(node: ts.Node) {
@@ -130,6 +130,10 @@ class TraceCodeLensProvider implements vscode.CodeLensProvider {
 								return name;
 							}
 						}
+					}
+					if (name === 'only' && propertyAccess.expression.kind === ts.SyntaxKind.Identifier) {
+						const ident = propertyAccess.expression as ts.Identifier;
+						return ident.text;
 					}
 			}
 		}
