@@ -14,6 +14,11 @@
 			"presentation": {
 				"reveal": "never"
 			},
+			"options": {
+				"env": {
+					"NODE_OPTIONS": "--openssl-legacy-provider"
+				}
+			},
 			"group": {
 				"kind": "build",
 				"isDefault": true
