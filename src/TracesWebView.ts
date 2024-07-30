@@ -3,7 +3,7 @@ import path from 'path';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-sql';
-import { Disposable, ExtensionContext, Uri, ViewColumn, WebviewPanel, window, workspace } from "vscode";
+import { Disposable, ExtensionContext, Uri, ViewColumn, Webview, WebviewPanel, window, workspace } from "vscode";
 var escape = require('escape-html');
 
 type testNode = {
@@ -89,9 +89,11 @@ export class TracesWebView {
         }
 
         const traces = this.loadTraces(documentUri, testNode);
-        panel.webview.html = this.getHtml(testNode, traces);
+        panel.webview.html = this.getHtml(testNode, traces, panel.webview);
 
         panel.reveal();
+
+        //panel.webview.postMessage({traces: traces});
 
         this.activePanel = panel;
     }
@@ -147,7 +149,7 @@ export class TracesWebView {
         return testTraces;
     }
 
-    getHtml(testNode: testNode, traces: Trace[]): string {
+    getHtml(testNode: testNode, traces: Trace[], webview: Webview): string {
         function getTestPath(testNode: testNode): string {
             if (testNode.parent) {
                 return getTestPath(testNode.parent) + ' > ' + testNode.title;
@@ -156,7 +158,9 @@ export class TracesWebView {
         }
         const testPath = getTestPath(testNode);
 
-        const tracesHtml = traces.reduce((str, trace) => str + this.renderTrace(trace), '');
+        //const tracesHtml = traces.reduce((str, trace) => str + this.renderTrace(trace), '');
+
+        const mainScriptSrc = webview.asWebviewUri(Uri.joinPath(this.context.extensionUri, "dist", "webview-main.js"));
 
         return `
 <!DOCTYPE html>
@@ -183,10 +187,15 @@ export class TracesWebView {
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0/themes/prism.min.css" rel="stylesheet" />
 </head>
 <body>
+    <script>
+        window._traces = [];
+    </script>
+    ${traces.map(trace => `<script>window._traces.push(${JSON.stringify(trace)})</script>`)}
     <div>
         <p>${escape(testPath)}</p>
-        <div>${tracesHtml}</div>
+        <div id="app"></div>
     </div>
+    <script src="${mainScriptSrc}"></script>
 </body>
 </html>`;
     }
