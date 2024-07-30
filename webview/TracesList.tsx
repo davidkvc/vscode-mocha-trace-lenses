@@ -10,13 +10,38 @@ export type TracesListProps = {
   traces: Trace[];
 };
 
-export default function TracesList(props: TracesListProps) {
-  const totalDuration = props.traces.reduce((agg, curr) => {
+function calculateTestDuration(traces: Trace[]) {
+  if (traces.length === 0) {
+    return 0;
+  }
+
+  if ('start' in traces[0]) {
+    let start = new Date(traces[0].start!);
+    let end = start.valueOf() + traces[0].elapsed;
+    for (let i = 1; i < traces.length; i++) {
+      const localStart = new Date(traces[i].start!);
+      const localEnd = localStart.valueOf() + traces[i].elapsed;
+      if (localStart.valueOf() < start.valueOf()) {
+        start = localStart;
+      }
+      if (localEnd > end) {
+        end = localEnd;
+      }
+    }
+
+    return end - start.valueOf();
+  }
+
+  return traces.reduce((agg, curr) => {
     if ("elapsed" in curr) {
       return agg + curr.elapsed;
     }
     return agg;
   }, 0);
+}
+
+export default function TracesList(props: TracesListProps) {
+  const totalDuration = calculateTestDuration(props.traces);
 
   let testStart = new Date();
   if ('start' in props.traces[0]) {
