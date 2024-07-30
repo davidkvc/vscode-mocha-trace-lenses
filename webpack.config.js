@@ -9,7 +9,9 @@ const config = {
   target: 'node', // vscode extensions run in a Node.js-context 📖 -> https://webpack.js.org/configuration/node/
 	mode: 'none', // this leaves the source code as close as possible to the original (when packaging we set this to 'production')
 
-  entry: './src/extension.ts', // the entry point of this extension, 📖 -> https://webpack.js.org/configuration/entry-context/
+  entry: {
+    extension: './src/extension.ts',
+  },
   output: {
     // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
     path: path.resolve(__dirname, 'dist'),
@@ -22,20 +24,74 @@ const config = {
   },
   resolve: {
     // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
-    extensions: ['.ts', '.js']
+    extensions: ['.ts', '.tsx', '.js']
   },
   module: {
     rules: [
       {
-        test: /\.ts$/,
+        test: /\.tsx?$/,
+        include: path.resolve(__dirname, 'src'),
         exclude: /node_modules/,
         use: [
           {
             loader: 'ts-loader'
           }
         ]
+      },
+      {
+        test: /\.tsx?$/,
+        include: path.resolve(__dirname, 'webview'),
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'ts-loader',
+            options: {
+              configFile: 'webview/tsconfig.json'
+            }
+          }
+        ]
       }
-    ]
+    ],
   }
 };
-module.exports = config;
+
+/**@type {import('webpack').Configuration}*/
+const webConfig = {
+  target: 'web',
+  mode: 'development',
+  entry: {
+    webview: {
+      import: './webview/webview-main.tsx',
+      filename: 'webview-main.js',
+    },
+  },
+  output: {
+    // the bundle is stored in the 'dist' folder (check package.json), 📖 -> https://webpack.js.org/configuration/output/
+    path: path.resolve(__dirname, 'dist'),
+    filename: 'extension.js',
+  },
+  devtool: 'nosources-source-map',
+  resolve: {
+    // support reading TypeScript and JavaScript files, 📖 -> https://github.com/TypeStrong/ts-loader
+    extensions: ['.ts', '.tsx', '.js']
+  },
+  module: {
+    rules: [
+      {
+        test: /\.tsx?$/,
+        include: path.resolve(__dirname, 'webview'),
+        exclude: /node_modules/,
+        use: [
+          {
+            loader: 'ts-loader',
+            options: {
+              configFile: 'webview/tsconfig.json'
+            }
+          }
+        ]
+      }
+    ],
+  }
+};
+
+module.exports = [config, webConfig];
