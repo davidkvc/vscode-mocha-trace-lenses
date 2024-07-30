@@ -183,6 +183,33 @@ export class TracesWebView {
             display: block;
             word-wrap: break-word;
         }
+        .styled-table {
+            border-collapse: collapse;
+            margin-top: 6px;
+            font-size: 0.9em;
+            font-family: sans-serif;
+            min-width: 400px;
+        }
+        .styled-table thead tr {
+            background-color: #009879;
+            color: #ffffff;
+            text-align: left;
+        }
+        .styled-table th,
+        .styled-table td {
+            padding: 6px 8px;
+        }
+        .styled-table tbody tr {
+            border-bottom: 1px solid #dddddd;
+        }   
+
+        .styled-table tbody tr:nth-of-type(even) {
+            background-color: #f3f3f3;
+        }
+
+        .styled-table tbody tr:last-of-type {
+            border-bottom: 2px solid #009879;
+        }
     </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.23.0/themes/prism.min.css" rel="stylesheet" />
 </head>

@@ -3,7 +3,8 @@ import React, { useState } from "react";
 export type TracePanelProps = React.PropsWithChildren<{
   summary: string;
   durationMs: number;
-  fillPercentage: number;
+  startFillPercentage: number;
+  endFillPercentage: number;
 }>;
 
 export default function TracePanel(props: TracePanelProps) {
@@ -15,7 +16,7 @@ export default function TracePanel(props: TracePanelProps) {
         style={{
           padding: "1rem",
           backgroundColor: "gray",
-          backgroundImage: `linear-gradient(to right, #fba3007a ${props.fillPercentage}%, rgba(0,0,0,0) ${props.fillPercentage}%)`,
+          backgroundImage: `linear-gradient(to right, rgba(0,0,0,0) ${props.startFillPercentage}%, #fba3007a ${props.startFillPercentage}%, #fba3007a ${props.endFillPercentage}%, rgba(0,0,0,0) ${props.endFillPercentage}%)`,
           color: 'black',
           cursor: 'pointer',
         }}

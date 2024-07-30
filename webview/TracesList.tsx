@@ -18,6 +18,18 @@ export default function TracesList(props: TracesListProps) {
     return agg;
   }, 0);
 
+  let testStart = new Date();
+  if ('start' in props.traces[0]) {
+    testStart = props.traces.reduce((agg, curr) => {
+      const start = new Date(curr.start!);
+      if (start.valueOf() < agg.valueOf()) {
+        return start;
+      }
+
+      return agg;
+    }, new Date());
+  }
+
   return (
     <div
       style={{
@@ -28,11 +40,11 @@ export default function TracesList(props: TracesListProps) {
     >
       {props.traces.map((trace) => {
         if (trace.type === "request") {
-          return renderRequestTrace(trace as RequestTrace, totalDuration);
+          return renderRequestTrace(trace as RequestTrace, totalDuration, testStart);
         }
 
         if (trace.type === "sql") {
-          return renderSqlTrace(trace as SqlTrace, totalDuration);
+          return renderSqlTrace(trace as SqlTrace, totalDuration, testStart);
         }
 
         return <div>Unknown trace type {trace.type}</div>;
@@ -41,7 +53,7 @@ export default function TracesList(props: TracesListProps) {
   );
 }
 
-function renderSqlTrace(trace: SqlTrace, totalDuration: number) {
+function renderSqlTrace(trace: SqlTrace, totalDuration: number, testStart: Date) {
   const firstWord = trace.sql.slice(0, trace.sql.indexOf(" "));
 
   let lines = `Executed SQL in ${trace.elapsed}ms\n\n${Prism.highlight(
@@ -52,17 +64,42 @@ function renderSqlTrace(trace: SqlTrace, totalDuration: number) {
 
   if (trace.result === 'success') {
     lines += `\n\n<<< success`;
+
+    if ('rows' in trace.data && Array.isArray(trace.data.rows)) {
+      lines += `\n${trace.data.rows.length} rows (experimental)`;
+      lines += `<table class="styled-table">`;
+      lines += `<thead>`;
+      lines += `<tr>`;
+      Object.keys(trace.data.rows[0]).forEach(k => {
+        lines += `<th>${escape(k)}</th>`;
+      });
+      lines += `</tr>`;
+      lines += `</thead>`;
+      lines += `<tbody>`;
+      trace.data.rows.forEach((row: Object) => {
+        lines += `<tr>`;
+        Object.values(row).forEach(val => {
+          lines += `<td>${escape(val)}</td>`;
+        });
+        lines += `</tr>`;
+      });
+      lines += `</tbody>`;
+      lines += `</table>`;
+    }
   }
 
   if (trace.result === "error") {
     lines += `\n\n<<< error\n${escape(trace.error!.str)}`;
   }
 
+  const [startFillPercentage, endFillPercentage] = calculateFill(trace, totalDuration, testStart);
+
   return (
     <TracePanel
       summary={`${firstWord}`}
       durationMs={trace.elapsed}
-      fillPercentage={(trace.elapsed / totalDuration) * 100}
+      startFillPercentage={startFillPercentage}
+      endFillPercentage={endFillPercentage}
     >
       <div>
         <pre>
@@ -73,7 +110,7 @@ function renderSqlTrace(trace: SqlTrace, totalDuration: number) {
   );
 }
 
-function renderRequestTrace(trace: RequestTrace, totalDuration: number) {
+function renderRequestTrace(trace: RequestTrace, totalDuration: number, testStart: Date) {
   const reqPath = new URL(trace.request.url).pathname;
 
   function isJson(contentType: string): boolean {
@@ -142,11 +179,14 @@ function renderRequestTrace(trace: RequestTrace, totalDuration: number) {
     lines += `<<< error\n${escape(trace.error!.str)}`;
   }
 
+  const [startFillPercentage, endFillPercentage] = calculateFill(trace, totalDuration, testStart);
+
   return (
     <TracePanel
       summary={`${trace.request.method} ${reqPath}`}
       durationMs={trace.elapsed}
-      fillPercentage={(trace.elapsed / totalDuration) * 100}
+      startFillPercentage={startFillPercentage}
+      endFillPercentage={endFillPercentage}
     >
       <div>
         <pre>
@@ -155,4 +195,16 @@ function renderRequestTrace(trace: RequestTrace, totalDuration: number) {
       </div>
     </TracePanel>
   );
+}
+
+function calculateFill(trace: Trace, totalDurationMs: number, testStart: Date) {
+  if (trace.start === undefined) {
+    return [0, (trace.elapsed / totalDurationMs) * 100];
+  }
+
+  const traceStart = new Date(trace.start);
+  const traceDelay = traceStart.valueOf() - testStart.valueOf();
+  const traceEnd = traceDelay + trace.elapsed;
+
+  return [(traceDelay / totalDurationMs) * 100, (traceEnd / totalDurationMs) * 100];
 }
