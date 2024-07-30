@@ -52,7 +52,6 @@ class TraceCodeLensProvider implements vscode.CodeLensProvider {
 				testNodes.forEach(createLenses);
 				function createLenses(testNode: testNode) {
 					const { line } = parsedFile.getLineAndCharacterOfPosition(testNode.pos);
-					console.log('converted node pos', testNode.pos, 'to line', line);
 					const lens = new vscode.CodeLens(
 						new vscode.Range(line, 0, line, 0),
 						{
@@ -89,9 +88,7 @@ class TraceCodeLensProvider implements vscode.CodeLensProvider {
 							pos: node.getStart(sourceFile),
 							parent: parentTest,
 							children: []
-						}
-
-						console.log('Found test', test.title, 'at', node.pos);
+						};
 
 						if (parentTest)
 							parentTest.children.push(test);
