@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import * as vscode from 'vscode';
 import Prism from 'prismjs';
 import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-sql';
@@ -94,6 +95,11 @@ export class TracesWebView {
         panel.reveal();
 
         //panel.webview.postMessage({traces: traces});
+        panel.webview.onDidReceiveMessage(e => {
+            if (e.command === 'saveClip') {
+                vscode.env.clipboard.writeText(e.data.text);
+            }
+        });
 
         this.activePanel = panel;
     }

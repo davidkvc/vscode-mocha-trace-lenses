@@ -4,10 +4,12 @@ import { RequestTrace, SqlTrace, Trace } from "./Trace";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/components/prism-sql";
+import { WebviewApi } from "./typings";
 var escape = require("escape-html");
 
 export type TracesListProps = {
   traces: Trace[];
+  vscode: WebviewApi;
 };
 
 function calculateTestDuration(traces: Trace[]) {
@@ -65,11 +67,11 @@ export default function TracesList(props: TracesListProps) {
     >
       {props.traces.map((trace) => {
         if (trace.type === "request") {
-          return renderRequestTrace(trace as RequestTrace, totalDuration, testStart);
+          return renderRequestTrace(trace as RequestTrace, totalDuration, testStart, props.vscode);
         }
 
         if (trace.type === "sql") {
-          return renderSqlTrace(trace as SqlTrace, totalDuration, testStart);
+          return renderSqlTrace(trace as SqlTrace, totalDuration, testStart, props.vscode);
         }
 
         return <div>Unknown trace type {trace.type}</div>;
@@ -78,14 +80,51 @@ export default function TracesList(props: TracesListProps) {
   );
 }
 
-function renderSqlTrace(trace: SqlTrace, totalDuration: number, testStart: Date) {
+function renderSqlTrace(trace: SqlTrace, totalDuration: number, testStart: Date, vscode: WebviewApi) {
   const firstWord = trace.sql.slice(0, trace.sql.indexOf(" "));
 
-  let lines = `Executed SQL in ${trace.elapsed}ms\n\n${Prism.highlight(
-    trace.sql,
+  const sqlTraceContent = createSqlTraceContent(trace, escape, (sql) => Prism.highlight(
+    sql,
     Prism.languages.sql,
     "sql"
-  )}`;
+  ));
+
+  const [startFillPercentage, endFillPercentage] = calculateFill(trace, totalDuration, testStart);
+
+  const handleCopyClick = (e: any) => {
+    vscode.postMessage({
+      command: 'saveClip',
+      data: {
+        text: createSqlTraceContent(trace, x => x, x => x),
+      }
+    });
+  };
+  
+  return (
+    <TracePanel
+      summary={`${firstWord}`}
+      durationMs={trace.elapsed}
+      startFillPercentage={startFillPercentage}
+      endFillPercentage={endFillPercentage}
+    >
+      <div style={{
+        position: 'relative',
+      }}>
+        <button onClick={handleCopyClick} style={{
+          position: 'absolute',
+          right: '4px',
+          top: '4px',
+        }}>Copy</button>
+        <pre>
+          <code dangerouslySetInnerHTML={{ __html: sqlTraceContent }}></code>
+        </pre>
+      </div>
+    </TracePanel>
+  );
+}
+
+function createSqlTraceContent(trace: SqlTrace, htmlEscape: (str: string) => string, highlightSql: (str: string) => string) {
+  let lines = `Executed SQL in ${trace.elapsed}ms\n\n${highlightSql(trace.sql)}`;
 
   if (trace.result === 'success') {
     lines += `\n\n<<< success`;
@@ -96,7 +135,7 @@ function renderSqlTrace(trace: SqlTrace, totalDuration: number, testStart: Date)
       lines += `<thead>`;
       lines += `<tr>`;
       Object.keys(trace.data.rows[0]).forEach(k => {
-        lines += `<th>${escape(k)}</th>`;
+        lines += `<th>${htmlEscape(k)}</th>`;
       });
       lines += `</tr>`;
       lines += `</thead>`;
@@ -104,7 +143,7 @@ function renderSqlTrace(trace: SqlTrace, totalDuration: number, testStart: Date)
       trace.data.rows.forEach((row: Object) => {
         lines += `<tr>`;
         Object.values(row).forEach(val => {
-          lines += `<td>${escape(val)}</td>`;
+          lines += `<td>${htmlEscape(val)}</td>`;
         });
         lines += `</tr>`;
       });
@@ -114,30 +153,56 @@ function renderSqlTrace(trace: SqlTrace, totalDuration: number, testStart: Date)
   }
 
   if (trace.result === "error") {
-    lines += `\n\n<<< error\n${escape(trace.error!.str)}`;
+    lines += `\n\n<<< error\n${htmlEscape(trace.error!.str)}`;
   }
+
+  return lines;
+}
+
+function renderRequestTrace(trace: RequestTrace, totalDuration: number, testStart: Date, vscode: WebviewApi) {
+  const reqPath = new URL(trace.request.url).pathname;
+
+  const requestTraceContent = createRequestTraceContent(trace, escape, (data) => Prism.highlight(
+    data,
+    Prism.languages.json,
+    "json"
+  ));
 
   const [startFillPercentage, endFillPercentage] = calculateFill(trace, totalDuration, testStart);
 
+  const handleCopyClick = (e: any) => {
+    vscode.postMessage({
+      command: 'saveClip',
+      data: {
+        text: createRequestTraceContent(trace, x => x, x => x),
+      }
+    });
+  };
+
   return (
     <TracePanel
-      summary={`${firstWord}`}
+      summary={`${trace.request.method} ${reqPath}`}
       durationMs={trace.elapsed}
       startFillPercentage={startFillPercentage}
       endFillPercentage={endFillPercentage}
     >
-      <div>
+      <div style={{
+        position: 'relative',
+      }}>
+        <button onClick={handleCopyClick} style={{
+          position: 'absolute',
+          right: '4px',
+          top: '4px',
+        }}>Copy</button>
         <pre>
-          <code dangerouslySetInnerHTML={{ __html: lines }}></code>
+          <code dangerouslySetInnerHTML={{ __html: requestTraceContent }}></code>
         </pre>
       </div>
     </TracePanel>
   );
 }
 
-function renderRequestTrace(trace: RequestTrace, totalDuration: number, testStart: Date) {
-  const reqPath = new URL(trace.request.url).pathname;
-
+function createRequestTraceContent(trace: RequestTrace, htmlEscape: (str: string) => string, highlightJson: (str: string) => string) {
   function isJson(contentType: string): boolean {
     return contentType
       .split(";")
@@ -154,30 +219,22 @@ function renderRequestTrace(trace: RequestTrace, totalDuration: number, testStar
         headers["content-type"] &&
         isJson(headers["content-type"])
       ) {
-        return `\n${Prism.highlight(
-          JSON.stringify(JSON.parse(body), null, 2),
-          Prism.languages.json,
-          "json"
-        )}\n`;
+        return `\n${highlightJson(JSON.stringify(JSON.parse(body), null, 2))}\n`;
       } else {
-        return `\n${escape(body)}\n`;
+        return `\n${htmlEscape(body)}\n`;
       }
     } else {
-      return `\n${Prism.highlight(
-        JSON.stringify(body, null, 2),
-        Prism.languages.json,
-        "json"
-      )}\n`;
+      return `\n${highlightJson(JSON.stringify(body, null, 2))}\n`;
     }
   }
 
-  let lines = `${escape(trace.request.method)} ${escape(trace.request.url)} (${
+  let lines = `${htmlEscape(trace.request.method)} ${htmlEscape(trace.request.url)} (${
     trace.elapsed
   }ms)\n`;
 
   if (trace.request.headers) {
     for (const key in trace.request.headers) {
-      lines += `${escape(key)}: ${escape(trace.request.headers[key])}\n`;
+      lines += `${htmlEscape(key)}: ${htmlEscape(trace.request.headers[key])}\n`;
     }
   }
 
@@ -188,10 +245,10 @@ function renderRequestTrace(trace: RequestTrace, totalDuration: number, testStar
   lines += "\n";
 
   if (trace.result === "success") {
-    lines += `<<< ${escape(trace.response.status)}\n`;
+    lines += `<<< ${htmlEscape(trace.response.status)}\n`;
     if (trace.response.headers) {
       for (const key in trace.response.headers) {
-        lines += `${escape(key)}: ${escape(trace.response.headers[key])}\n`;
+        lines += `${htmlEscape(key)}: ${htmlEscape(trace.response.headers[key])}\n`;
       }
     }
 
@@ -201,25 +258,10 @@ function renderRequestTrace(trace: RequestTrace, totalDuration: number, testStar
   }
 
   if (trace.result === 'error') {
-    lines += `<<< error\n${escape(trace.error!.str)}`;
+    lines += `<<< error\n${htmlEscape(trace.error!.str)}`;
   }
 
-  const [startFillPercentage, endFillPercentage] = calculateFill(trace, totalDuration, testStart);
-
-  return (
-    <TracePanel
-      summary={`${trace.request.method} ${reqPath}`}
-      durationMs={trace.elapsed}
-      startFillPercentage={startFillPercentage}
-      endFillPercentage={endFillPercentage}
-    >
-      <div>
-        <pre>
-          <code dangerouslySetInnerHTML={{ __html: lines }}></code>
-        </pre>
-      </div>
-    </TracePanel>
-  );
+  return lines;
 }
 
 function calculateFill(trace: Trace, totalDurationMs: number, testStart: Date) {

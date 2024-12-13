@@ -33,5 +33,5 @@ function App() {
     //     });
     // }, []);
 
-    return <TracesList traces={traces}/>;
+    return <TracesList traces={traces} vscode={vscode}/>;
 }
